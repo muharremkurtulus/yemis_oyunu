@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>En Çok Hangi Yemiş Var?</title>
+    <!-- Tailwind CSS for utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Ses Efektleri için Tone.js Kütüphanesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&display=swap');
+
+        body {
+            font-family: 'Baloo 2', cursive;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            /* Sonbahar gün batımı renkleri */
+            background: linear-gradient(to bottom, #F4A261, #E9C46A, #FFD166); 
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Canlı Orman / Bahçe Arka Plan CSS Çizimi - Sonbahar Tonları */
+        .background-layer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            z-index: -1;
+        }
+        
+        .grass-back {
+            background-color: #D62828; /* Koyu kızıl/kiremit yapraklar */
+            height: 30vh;
+            border-radius: 50% 50% 0 0 / 20px 20px 0 0;
+            transform: scale(1.2);
+            position: absolute;
+            bottom: -5vh;
+            width: 100%;
+        }
+
+        .grass-front {
+            background-color: #E76F51; /* Turuncumsu ön zemin */
+            height: 25vh;
+            border-radius: 50% 50% 0 0 / 40px 40px 0 0;
+            position: absolute;
+            bottom: -2vh;
+            width: 110%;
+            left: -5%;
+        }
+        
+        .cloud {
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50px;
+            position: absolute;
+            animation: float 20s infinite linear;
+        }
+
+        @keyframes float {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-20vw); }
+        }
+
+        /* UI Eleman Stilleri */
+        .game-panel {
+            background: rgba(255, 248, 240, 0.95);
+            border-radius: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border: 5px solid #2A9D8F; /* Orman yeşili çerçeve */
+            padding: 2rem;
+            text-align: center;
+            max-width: 800px;
+            width: 90%;
+            position: relative;
+            z-index: 10;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to bottom, #2A9D8F, #21867a);
+            color: white;
+            padding: 15px 40px;
+            font-size: 2rem;
+            border-radius: 50px;
+            border: 4px solid #fff;
+            box-shadow: 0 8px 0 #185a52, 0 15px 20px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.1s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .btn-primary:active {
+            transform: translateY(8px);
+            box-shadow: 0 0px 0 #185a52, 0 5px 10px rgba(0,0,0,0.3);
+        }
+
+        /* Geri Sayım Animasyonu */
+        .countdown-text {
+            font-size: 8rem;
+            color: #D62828;
+            text-shadow: 4px 4px 0 #FFF, 8px 8px 0 #333;
+            animation: popIn 1s infinite ease-in-out;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+
+        /* Oyun Alanı */
+        #gameArea {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr); 
+            grid-template-rows: repeat(6, 1fr);
+            gap: 5px;
+            margin: 10px auto;
+            background: rgba(255,255,255,0.6);
+            padding: 10px;
+            border-radius: 20px;
+            border: 3px dashed #E76F51;
+            width: 100%;
+            max-width: 50vh;
+            aspect-ratio: 1 / 1;
+        }
+
+        .fruit-item {
+            width: 100%;
+            height: 100%;
+            max-height: 100%;
+            cursor: pointer;
+            object-fit: contain;
+            transition: transform 0.2s;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3));
+            animation: appear 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .fruit-item:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .fruit-item:active {
+            transform: scale(0.9);
+        }
+
+        @keyframes appear {
+            0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        .correct-choice {
+            animation: bounce 0.5s ease;
+        }
+        
+        .wrong-choice {
+            animation: shake 0.5s ease;
+            filter: grayscale(100%);
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+            40% {transform: translateY(-30px) scale(1.1);}
+            60% {transform: translateY(-15px);}
+        }
+
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-10px) rotate(-5deg); }
+            50% { transform: translateX(10px) rotate(5deg); }
+            75% { transform: translateX(-10px) rotate(-5deg); }
+            100% { transform: translateX(0); }
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #D62828;
+            font-weight: bold;
+        }
+        
+        .score-box, .time-box {
+            background: #FFF;
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 3px solid #E76F51;
+            box-shadow: 0 4px 0 #E76F51;
+        }
+
+        .time-warning {
+            color: #D62828;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .fruit-placeholder {
+            width: 80px;
+            height: 80px;
+            background-color: #E9C46A;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: inset -5px -5px 10px rgba(0,0,0,0.1);
+        }
+
+        .star-image {
+            max-width: 200px;
+            margin: 0 auto 20px;
+            animation: spinAndPop 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes spinAndPop {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Arka Plan Bulutları -->
+    <div class="cloud" style="width: 100px; height: 30px; top: 10%; animation-duration: 25s; animation-delay: 0s;"></div>
+    <div class="cloud" style="width: 150px; height: 50px; top: 20%; animation-duration: 35s; animation-delay: -10s;"></div>
+    <div class="cloud" style="width: 80px; height: 25px; top: 15%; animation-duration: 18s; animation-delay: -5s;"></div>
+    
+    <div class="background-layer">
+        <div class="grass-back"></div>
+        <div class="grass-front"></div>
+    </div>
+
+    <!-- 1. ANA EKRAN -->
+    <div id="screen-start" class="game-panel">
+        <h1 class="text-5xl text-[#D62828] mb-4 drop-shadow-md">Yemiş Avcısı!</h1>
+        <p class="text-xl text-gray-700 mb-8">Sonbahar ormanında en çok hangi yemişten var? Bul ve tıkla!<br>Meşe palamutlarına dikkat et!</p>
+        
+        <button id="btnStart" class="btn-primary">Oyuna Başla</button>
+        
+        <div class="mt-8 flex justify-center space-x-4 opacity-80">
+            <!-- Örnek Dekoratif Yemişler -->
+            <img src="images/mesepalamudu.png" onerror="this.src='https://placehold.co/60x60/8B4513/FFF?text=MP'" class="w-16 h-16 animate-bounce" style="animation-delay: 0.1s">
+            <img src="images/ceviz.png" onerror="this.src='https://placehold.co/60x60/A0522D/FFF?text=CV'" class="w-16 h-16 animate-bounce" style="animation-delay: 0.3s">
+            <img src="images/kozalak.png" onerror="this.src='https://placehold.co/60x60/5C4033/FFF?text=KZ'" class="w-16 h-16 animate-bounce" style="animation-delay: 0.5s">
+        </div>
+    </div>
+
+    <!-- 2. GERİ SAYIM EKRANI -->
+    <div id="screen-countdown" class="hidden absolute inset-0 flex items-center justify-center z-50">
+        <div id="countdown-number" class="countdown-text">5</div>
+    </div>
+
+    <!-- 3. OYUN EKRANI -->
+    <div id="screen-game" class="hidden game-panel">
+        <div class="top-bar">
+            <div class="score-box">
+                Puan: <span id="scoreDisplay" class="text-[#2A9D8F] font-bold">0</span>
+            </div>
+            <div class="time-box" id="timeBox">
+                Süre: <span id="timeDisplay">180</span>s
+            </div>
+        </div>
+        
+        <h2 class="text-3xl text-[#E76F51] mb-2 drop-shadow-sm font-bold">En Fazla Olanı Seç!</h2>
+        
+        <div id="gameArea">
+            <!-- Yemişler buraya JavaScript ile eklenecek -->
+        </div>
+    </div>
+
+    <!-- 4. BİTİŞ EKRANI -->
+    <div id="screen-end" class="hidden game-panel">
+        <h2 class="text-5xl text-[#D62828] mb-6">Süre Bitti!</h2>
+        
+        <img src="images/yildiz.png" onerror="this.src='https://placehold.co/150x150/FFD700/FFF?text=YILDIZ'" alt="Başarı Yıldızı" class="star-image">
+        
+        <p class="text-3xl text-gray-700 mb-8">Topladığın Puan: <span id="finalScore" class="text-5xl text-[#2A9D8F] font-bold">0</span></p>
+        
+        <button id="btnRestart" class="btn-primary">Tekrar Oyna</button>
+    </div>
+
+    <!-- 5. YANLIŞ CEVAP EKRANI (MODAL) -->
+    <div id="screen-wrong" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
+        <div class="game-panel border-red-500 border-8 transform transition-transform scale-100 flex flex-col items-center">
+            <h2 class="text-6xl text-[#D62828] mb-4 drop-shadow-md">Ups! Yanlış Seçim 🙈</h2>
+            <p class="text-3xl text-gray-700 mb-6 font-bold">Daha dikkatli bakmalısın!<br>Hadi farklı bir orman tablosuyla tekrar dene.</p>
+            <div class="text-8xl mb-4 animate-bounce">❌</div>
+        </div>
+    </div>
+
+    <script>
+        // --- DEĞİŞKENLER ---
+        const GAME_DURATION = 180;
+        let score = 0;
+        let timeLeft = GAME_DURATION;
+        let timerInterval;
+        let countdownInterval;
+        
+        // Yeni 10 Sonbahar Yemişi
+        const nutImages = [
+            "images/mesepalamudu.png", // Index 0: Öğrencinin favorisi
+            "images/ceviz.png", 
+            "images/findik.png", 
+            "images/kestane.png", 
+            "images/badem.png", 
+            "images/yerfistigi.png", 
+            "images/kozalak.png", 
+            "images/kabakcekirdegi.png", 
+            "images/aycekirdegi.png", 
+            "images/kaju.png"
+        ];
+
+        let currentTargetFruit = "";
+        let isInputLocked = false;
+        
+        // Palamut çıkma mantığı için sayaç
+        let roundsSinceAcorn = 0;
+        let nextAcornTargetRound = 0; // İlk oyunda ayarlanacak
+
+        // --- SES KURULUMU ---
+        let audioInitialized = false;
+        let tickSynth, correctSynth, wrongSynth;
+
+        async function initAudio() {
+            if (audioInitialized) return;
+            await Tone.start();
+            
+            tickSynth = new Tone.Synth({
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
+            }).toDestination();
+            tickSynth.volume.value = -10;
+
+            correctSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.5 }
+            }).toDestination();
+            correctSynth.volume.value = -5;
+
+            wrongSynth = new Tone.Synth({
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 }
+            }).toDestination();
+            wrongSynth.volume.value = -12;
+
+            audioInitialized = true;
+        }
+
+        function playTick(isHigh = false) {
+            if (!audioInitialized) return;
+            tickSynth.triggerAttackRelease(isHigh ? "C6" : "C5", "32n");
+        }
+
+        function playCorrect() {
+            if (!audioInitialized) return;
+            const now = Tone.now();
+            correctSynth.triggerAttackRelease(["C5", "E5"], "16n", now);
+        }
+
+        function playWrong() {
+            if (!audioInitialized) return;
+            wrongSynth.triggerAttackRelease("C3", "8n");
+        }
+
+        // --- DOM ELEMANLARI ---
+        const screenStart = document.getElementById('screen-start');
+        const screenCountdown = document.getElementById('screen-countdown');
+        const screenGame = document.getElementById('screen-game');
+        const screenEnd = document.getElementById('screen-end');
+        const screenWrong = document.getElementById('screen-wrong');
+        
+        const btnStart = document.getElementById('btnStart');
+        const btnRestart = document.getElementById('btnRestart');
+        const countdownNumber = document.getElementById('countdown-number');
+        
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const timeBox = document.getElementById('timeBox');
+        const gameArea = document.getElementById('gameArea');
+        const finalScore = document.getElementById('finalScore');
+
+        btnStart.addEventListener('click', async () => {
+            await initAudio();
+            startCountdown();
+        });
+        btnRestart.addEventListener('click', resetGameToStart);
+
+        function startCountdown() {
+            screenStart.classList.add('hidden');
+            screenCountdown.classList.remove('hidden');
+            
+            let count = 5;
+            countdownNumber.innerText = count;
+            countdownNumber.style.color = getRandomColor();
+            playTick();
+
+            countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownNumber.innerText = count;
+                    countdownNumber.style.color = getRandomColor();
+                    playTick();
+                    
+                    countdownNumber.classList.remove('countdown-text');
+                    void countdownNumber.offsetWidth;
+                    countdownNumber.classList.add('countdown-text');
+                    
+                } else if (count === 0) {
+                    countdownNumber.innerText = "BAŞLA!";
+                    countdownNumber.style.color = "#2A9D8F";
+                    playTick(true);
+                } else {
+                    clearInterval(countdownInterval);
+                    startGame();
+                }
+            }, 1000);
+        }
+
+        function getRandomColor() {
+            const colors = ['#D62828', '#F4A261', '#E76F51', '#2A9D8F', '#264653', '#E9C46A'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function startGame() {
+            screenCountdown.classList.add('hidden');
+            screenGame.classList.remove('hidden');
+            
+            score = 0;
+            timeLeft = GAME_DURATION;
+            roundsSinceAcorn = 0;
+            // İlk palamut hedefi 1., 2. veya 3. turda çıksın
+            nextAcornTargetRound = Math.floor(Math.random() * 3) + 1; 
+
+            updateScoreDisplay();
+            updateTimeDisplay();
+            timeBox.classList.remove('time-warning');
+            
+            generateNewRound();
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimeDisplay();
+                
+                if (timeLeft <= 10) {
+                    timeBox.classList.add('time-warning');
+                }
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            screenGame.classList.add('hidden');
+            screenEnd.classList.remove('hidden');
+            finalScore.innerText = score;
+        }
+
+        function resetGameToStart() {
+            screenEnd.classList.add('hidden');
+            screenStart.classList.remove('hidden');
+        }
+
+        function updateScoreDisplay() {
+            scoreDisplay.innerText = score;
+        }
+
+        function updateTimeDisplay() {
+            timeDisplay.innerText = timeLeft;
+        }
+
+        function generateNewRound() {
+            gameArea.innerHTML = '';
+            isInputLocked = false;
+            roundsSinceAcorn++;
+            
+            const GRID_SIZE = 6;
+            const TOTAL_SLOTS = GRID_SIZE * GRID_SIZE;
+            
+            const acornPath = "images/mesepalamudu.png";
+            
+            // 1. Hedef Yemişi Belirleme (Palamut Kontrolü)
+            if (roundsSinceAcorn >= nextAcornTargetRound) {
+                // Palamut zamanı geldi!
+                currentTargetFruit = acornPath;
+                roundsSinceAcorn = 0;
+                // Bir sonraki palamut şöleni 3 veya 4 el sonra olsun
+                nextAcornTargetRound = Math.floor(Math.random() * 2) + 3;
+            } else {
+                // Diğer yemişlerden rastgele biri hedef olsun
+                let otherNuts = nutImages.filter(n => n !== acornPath);
+                currentTargetFruit = otherNuts[Math.floor(Math.random() * otherNuts.length)];
+            }
+            
+            let targetCount = Math.floor(Math.random() * 3) + 10; // 10-12 arası ana hedef
+            let allFruitsToRender = [];
+            
+            // Hedefleri ekle
+            for(let i=0; i<targetCount; i++) {
+                allFruitsToRender.push({ type: currentTargetFruit, isTarget: true });
+            }
+            
+            let slotsLeft = TOTAL_SLOTS - targetCount;
+
+            // 2. Kafa Karıştırıcı (Distractor) Yemişleri Seçme
+            let availableDistractors = nutImages.filter(n => n !== currentTargetFruit);
+            availableDistractors = availableDistractors.sort(() => 0.5 - Math.random());
+            
+            let chosenDistractors = [];
+            
+            // Hedef palamut DEĞİLSE bile, ekranda muhakkak en az 1-2 palamut olsun ki öğrenci görsün
+            if (currentTargetFruit !== acornPath) {
+                chosenDistractors.push(acornPath); // Palamutu kafa karıştırıcılara kesin ekle
+                availableDistractors = availableDistractors.filter(n => n !== acornPath); // Yedeklerden çıkar
+                chosenDistractors.push(...availableDistractors.slice(0, 3)); // 3 tane daha rastgele al (toplam 4)
+            } else {
+                // Zaten hedef palamut, 4 rastgele kafa karıştırıcı al
+                chosenDistractors = availableDistractors.slice(0, 4);
+            }
+
+            // Kalan boşlukları bu 4 kafa karıştırıcıya dağıt
+            for (let i = 0; i < chosenDistractors.length; i++) {
+                let countToAdd;
+                if (i === chosenDistractors.length - 1) {
+                    countToAdd = slotsLeft; 
+                } else {
+                    let avg = Math.floor(slotsLeft / (chosenDistractors.length - i));
+                    countToAdd = avg + Math.floor(Math.random() * 3) - 1; 
+                    countToAdd = Math.max(1, Math.min(countToAdd, targetCount - 1));
+                }
+                
+                for(let j=0; j<countToAdd; j++) {
+                    allFruitsToRender.push({ type: chosenDistractors[i], isTarget: false });
+                }
+                slotsLeft -= countToAdd;
+            }
+
+            // Oluşturulan 36 yemişi rastgele karıştır
+            allFruitsToRender = allFruitsToRender.sort(() => 0.5 - Math.random());
+
+            // DOM'a ekle
+            allFruitsToRender.forEach((fruitData) => {
+                const img = document.createElement('img');
+                img.src = fruitData.type;
+                
+                const fallbackText = fruitData.type.replace('images/', '').substring(0,2).toUpperCase();
+                img.onerror = function() {
+                     this.onerror = null; 
+                     this.src = `https://placehold.co/80x80/E9C46A/333?text=${fallbackText}`;
+                     this.classList.add('fruit-placeholder');
+                };
+                
+                img.classList.add('fruit-item');
+                img.style.animationDelay = `${Math.random() * 0.3}s`;
+                
+                img.dataset.isTarget = fruitData.isTarget;
+                img.dataset.type = fruitData.type;
+                
+                img.addEventListener('click', handleFruitClick);
+                
+                gameArea.appendChild(img);
+            });
+        }
+
+        function handleFruitClick(e) {
+            if (isInputLocked) return; 
+            
+            const clickedFruit = e.target;
+            const isTarget = clickedFruit.dataset.isTarget === 'true';
+
+            if (isTarget) {
+                // DOĞRU CEVAP
+                isInputLocked = true;
+                score += 10;
+                updateScoreDisplay();
+                playCorrect();
+                
+                const allTargets = gameArea.querySelectorAll(`[data-is-target="true"]`);
+                allTargets.forEach(el => {
+                    el.classList.add('correct-choice');
+                });
+
+                setTimeout(() => {
+                    generateNewRound();
+                }, 600); 
+
+            } else {
+                // YANLIŞ CEVAP
+                isInputLocked = true;
+                score = Math.max(0, score - 5); 
+                updateScoreDisplay();
+                playWrong(); 
+                
+                clickedFruit.classList.add('wrong-choice');
+                
+                setTimeout(() => {
+                    screenWrong.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        screenWrong.classList.add('hidden');
+                        generateNewRound(); 
+                    }, 2000);
+                    
+                }, 400); 
+            }
+        }
+    </script>
+</body>
+</html>
